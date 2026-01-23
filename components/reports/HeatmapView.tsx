@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { APIProvider, Map, HeatmapLayer } from "@vis.gl/react-google-maps";
+import { APIProvider, Map } from "@vis.gl/react-google-maps";
 import { getGoogleMapsApiKey, getDefaultMapCenter, getDefaultZoom } from "@/lib/google-maps";
 import { Denuncia } from "@/lib/types";
+import HeatmapLayer from "@/components/map/HeatmapLayer";
 
 export default function HeatmapView() {
   const [denuncias, setDenuncias] = useState<Denuncia[]>([]);
@@ -29,7 +30,7 @@ export default function HeatmapView() {
 
   const heatmapData = useMemo(() => {
     return denuncias.map((d) => ({
-      location: new google.maps.LatLng(d.ubicacion.lat, d.ubicacion.lng),
+      location: { lat: d.ubicacion.lat, lng: d.ubicacion.lng },
       weight: 1,
     }));
   }, [denuncias]);
