@@ -2,11 +2,16 @@ export interface Denuncia {
   id: string;
   tipo: TipoRobo;
   fecha: Date;
+  hora?: string;
   ubicacion: {
     lat: number;
     lng: number;
     direccion?: string;
+    zona?: string;
   };
+  marca?: string;
+  modelo?: string;
+  modalidad?: string;
   descripcion?: string;
   estado: "pendiente" | "verificada" | "rechazada";
   createdAt: Date;
@@ -24,11 +29,16 @@ export type TipoRobo =
 export interface CreateDenunciaInput {
   tipo: TipoRobo;
   fecha: string;
+  hora?: string;
   ubicacion: {
     lat: number;
     lng: number;
     direccion?: string;
+    zona?: string;
   };
+  marca?: string;
+  modelo?: string;
+  modalidad?: string;
   descripcion?: string;
   contacto?: {
     email?: string;

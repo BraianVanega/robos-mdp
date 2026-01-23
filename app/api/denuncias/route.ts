@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CreateDenunciaInput, Denuncia } from "@/lib/types";
 import { validateCoordinates } from "@/lib/utils";
-import { denunciasStore } from "@/lib/store";
+import { readDenuncias, writeDenuncias, addDenuncia } from "@/lib/store";
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,20 +22,28 @@ export async function POST(request: NextRequest) {
       id: `denuncia-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       tipo: body.tipo,
       fecha: new Date(body.fecha),
-      ubicacion: body.ubicacion,
+      hora: body.hora,
+      ubicacion: {
+        ...body.ubicacion,
+        zona: body.ubicacion.zona,
+      },
+      marca: body.marca,
+      modelo: body.modelo,
+      modalidad: body.modalidad,
       descripcion: body.descripcion,
       estado: "pendiente",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    // TODO: Guardar en CMS aquí
+    // Guardar en archivo JSON
+    addDenuncia(nuevaDenuncia);
+
+    // TODO: Guardar en CMS aquí (opcional)
     // Ejemplo para Prismic:
     // await prismicClient.create('denuncia', { ... })
     // Ejemplo para Contentstack:
     // await contentstackClient.contentType('denuncia').entry().create({ ... })
-
-    denunciasStore.push(nuevaDenuncia);
 
     return NextResponse.json(nuevaDenuncia, { status: 201 });
   } catch (error) {
@@ -54,7 +62,8 @@ export async function GET(request: NextRequest) {
     const fechaDesde = searchParams.get("fechaDesde");
     const fechaHasta = searchParams.get("fechaHasta");
 
-    let denuncias = [...denunciasStore];
+    // Leer denuncias del archivo JSON
+    let denuncias = readDenuncias();
 
     // Filtros
     if (tipo && tipo !== "todos") {
@@ -71,7 +80,7 @@ export async function GET(request: NextRequest) {
       denuncias = denuncias.filter((d) => d.fecha <= hasta);
     }
 
-    // TODO: Obtener desde CMS aquí
+    // TODO: Obtener desde CMS aquí (opcional)
     // Ejemplo para Prismic:
     // const denuncias = await prismicClient.getAllByType('denuncia', { ... })
     // Ejemplo para Contentstack:

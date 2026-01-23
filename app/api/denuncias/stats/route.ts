@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DenunciaStats, TipoRobo, Denuncia } from "@/lib/types";
-import { denunciasStore } from "@/lib/store";
+import { readDenuncias } from "@/lib/store";
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Obtener denuncias desde CMS
-    // const denuncias = await getDenunciasFromCMS();
-
-    const denuncias: Denuncia[] = denunciasStore;
+    // Leer denuncias del archivo JSON
+    const denuncias: Denuncia[] = readDenuncias();
 
     // Calcular estadísticas
     const total = denuncias.length;

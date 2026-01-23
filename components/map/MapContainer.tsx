@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { APIProvider, Map } from "@vis.gl/react-google-maps";
-import { getGoogleMapsApiKey, getDefaultMapCenter, getDefaultZoom } from "@/lib/google-maps";
+import {
+  getGoogleMapsApiKey,
+  getDefaultMapCenter,
+  getDefaultZoom,
+} from "@/lib/google-maps";
 import MapMarker from "./MapMarker";
-import HeatmapLayer from "./HeatmapLayer";
 import ReportForm from "./ReportForm";
 import { Denuncia, TipoRobo } from "@/lib/types";
-import { MapPin, Layers } from "lucide-react";
 
 export default function MapContainer() {
   const [denuncias, setDenuncias] = useState<Denuncia[]>([]);
@@ -15,139 +17,189 @@ export default function MapContainer() {
     lat: number;
     lng: number;
   } | null>(null);
-  const [isHeatmapMode, setIsHeatmapMode] = useState(false);
-  const [filtroTipo, setFiltroTipo] = useState<TipoRobo | "todos">("todos");
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  useEffect(() => {
-    // Cargar denuncias al montar el componente
-    fetchDenuncias();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Obtener configuración del mapa de forma segura
+  const [apiKey, setApiKey] = useState<string>("");
+  const [mapConfig, setMapConfig] = useState<{
+    center: { lat: number; lng: number };
+    zoom: number;
+  }>({
+    center: { lat: -38.0055, lng: -57.5426 }, // Mar del Plata, Buenos Aires, Argentina
+    zoom: 10,
+  });
 
-  const fetchDenuncias = async () => {
+  // Función para cargar denuncias
+  const fetchDenuncias = useCallback(async () => {
     try {
       const response = await fetch("/api/denuncias");
       if (response.ok) {
         const data = await response.json();
-        setDenuncias(data);
+        // Convertir fechas de string a Date
+        const denunciasWithDates = data.map((d: any) => ({
+          ...d,
+          fecha: new Date(d.fecha),
+          createdAt: new Date(d.createdAt),
+          updatedAt: new Date(d.updatedAt),
+        }));
+        setDenuncias(denunciasWithDates);
       }
     } catch (error) {
       console.error("Error al obtener denuncias:", error);
+      // No mostramos error al usuario, solo en consola
     }
-  };
+  }, []);
 
-  const apiKey = getGoogleMapsApiKey();
-  const defaultCenter = getDefaultMapCenter();
-  const defaultZoom = getDefaultZoom();
+  useEffect(() => {
+    // Obtener configuración de forma asíncrona para no bloquear el render
+    try {
+      const key = getGoogleMapsApiKey();
+      const center = getDefaultMapCenter();
+      const zoom = getDefaultZoom();
+      setApiKey(key);
+      setMapConfig({ center, zoom });
+    } catch (error) {
+      console.error("Error al obtener configuración de Google Maps:", error);
+      // Mantener valores por defecto
+    }
 
-  const handleMapClick = useCallback((event: google.maps.MapMouseEvent) => {
-    if (event.latLng) {
-      setSelectedLocation({
-        lat: event.latLng.lat(),
-        lng: event.latLng.lng(),
-      });
+    // Cargar denuncias después de que el mapa se haya renderizado
+    // No bloqueamos el renderizado del mapa
+    fetchDenuncias();
+  }, [fetchDenuncias]);
+
+  const handleMapClick = useCallback((event: any) => {
+    // Manejar diferentes formatos de evento
+    let lat: number | null = null;
+    let lng: number | null = null;
+
+    if (event.detail?.latLng) {
+      lat = event.detail.latLng.lat;
+      lng = event.detail.latLng.lng;
+    } else if (event.latLng) {
+      // Formato alternativo
+      lat =
+        typeof event.latLng.lat === "function"
+          ? event.latLng.lat()
+          : event.latLng.lat;
+      lng =
+        typeof event.latLng.lng === "function"
+          ? event.latLng.lng()
+          : event.latLng.lng;
+    }
+
+    if (lat !== null && lng !== null) {
+      setSelectedLocation({ lat, lng });
       setIsFormOpen(true);
     }
   }, []);
 
-  const handleFormSubmit = useCallback(async (data: any) => {
-    if (!selectedLocation) return;
-    
-    try {
-      const response = await fetch("/api/denuncias", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tipo: data.tipo,
-          fecha: data.fecha,
-          ubicacion: selectedLocation,
-          descripcion: data.descripcion,
-          contacto: data.contacto,
-        }),
-      });
+  const handleFormSubmit = useCallback(
+    async (data: any) => {
+      if (!selectedLocation) return;
 
-      if (response.ok) {
-        const nuevaDenuncia = await response.json();
-        setDenuncias((prev) => [...prev, nuevaDenuncia]);
-        setIsFormOpen(false);
-        setSelectedLocation(null);
-        // Recargar denuncias para asegurar sincronización
-        await fetchDenuncias();
-      } else {
-        const error = await response.json();
-        alert(`Error: ${error.error || "No se pudo crear la denuncia"}`);
+      try {
+        // Determinar tipo basado en modalidad
+        let tipo: TipoRobo = data.tipo || "otro";
+        if (
+          data.modalidad?.includes("Asalto") ||
+          data.modalidad?.includes("Mano Armada")
+        ) {
+          tipo = "asalto";
+        } else if (
+          data.modalidad?.includes("Robo") &&
+          (data.marca || data.modelo)
+        ) {
+          // Si hay marca/modelo y es robo, puede ser vehículo o bicicleta
+          // Por ahora asumimos vehículo, pero se puede mejorar con más lógica
+          tipo = "robo_vehiculo";
+        } else if (data.modalidad?.includes("Hurto")) {
+          tipo = "hurto";
+        }
+
+        const response = await fetch("/api/denuncias", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tipo: tipo,
+            fecha: data.fecha,
+            hora: data.hora,
+            ubicacion: {
+              lat: selectedLocation.lat,
+              lng: selectedLocation.lng,
+              zona: data.zona,
+            },
+            marca: data.marca,
+            modelo: data.modelo,
+            modalidad: data.modalidad,
+            descripcion: data.descripcion,
+          }),
+        });
+
+        if (response.ok) {
+          const nuevaDenuncia = await response.json();
+          setDenuncias((prev) => [
+            ...prev,
+            {
+              ...nuevaDenuncia,
+              fecha: new Date(nuevaDenuncia.fecha),
+              createdAt: new Date(nuevaDenuncia.createdAt),
+              updatedAt: new Date(nuevaDenuncia.updatedAt),
+            },
+          ]);
+          setIsFormOpen(false);
+          setSelectedLocation(null);
+          // Recargar denuncias para asegurar sincronización
+          await fetchDenuncias();
+        } else {
+          const error = await response.json();
+          alert(`Error: ${error.error || "No se pudo crear la denuncia"}`);
+        }
+      } catch (error) {
+        console.error("Error al crear denuncia:", error);
+        alert("Error al crear la denuncia. Por favor, intenta nuevamente.");
       }
-    } catch (error) {
-      console.error("Error al crear denuncia:", error);
-      alert("Error al crear la denuncia. Por favor, intenta nuevamente.");
-    }
-  }, [selectedLocation]);
+    },
+    [selectedLocation, fetchDenuncias]
+  );
 
-  const denunciasFiltradas = useMemo(() => {
-    if (filtroTipo === "todos") return denuncias;
-    return denuncias.filter((d) => d.tipo === filtroTipo);
-  }, [denuncias, filtroTipo]);
-
-  const heatmapData = useMemo(() => {
-    return denunciasFiltradas.map((d) => ({
-      location: new google.maps.LatLng(d.ubicacion.lat, d.ubicacion.lng),
-      weight: 1,
-    }));
-  }, [denunciasFiltradas]);
+  // Manejo de errores para API key
+  if (!apiKey) {
+    return (
+      <div className="flex items-center justify-center h-full w-full bg-gray-100">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+            Error de Configuración
+          </h2>
+          <p className="text-gray-600 mb-4">
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY no está configurada
+          </p>
+          <p className="text-sm text-gray-500">
+            Por favor, configura la variable de entorno
+            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY en tu archivo .env.local
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <APIProvider apiKey={apiKey}>
       <div className="relative w-full h-full">
         <Map
           style={{ width: "100%", height: "100%" }}
-          defaultCenter={defaultCenter}
-          defaultZoom={defaultZoom}
+          defaultCenter={mapConfig.center}
+          defaultZoom={mapConfig.zoom}
           onClick={handleMapClick}
           gestureHandling="greedy"
           disableDefaultUI={false}
         >
-          {!isHeatmapMode &&
-            denunciasFiltradas.map((denuncia) => (
-              <MapMarker key={denuncia.id} denuncia={denuncia} />
-            ))}
-          {isHeatmapMode && <HeatmapLayer data={heatmapData} />}
+          {denuncias.map((denuncia) => (
+            <MapMarker key={denuncia.id} denuncia={denuncia} />
+          ))}
         </Map>
-
-        {/* Controles */}
-        <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-          <button
-            onClick={() => setIsHeatmapMode(!isHeatmapMode)}
-            className="bg-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 hover:bg-gray-50 transition-colors"
-          >
-            <Layers className="w-4 h-4" />
-            {isHeatmapMode ? "Vista Normal" : "Vista Heatmap"}
-          </button>
-
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value as TipoRobo | "todos")}
-            className="bg-white px-4 py-2 rounded-lg shadow-lg border border-gray-200"
-          >
-            <option value="todos">Todos los tipos</option>
-            <option value="asalto">Asalto</option>
-            <option value="robo_vehiculo">Robo Vehículo</option>
-            <option value="robo_celular">Robo Celular</option>
-            <option value="robo_bicicleta">Robo Bicicleta</option>
-            <option value="hurto">Hurto</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
-
-        {/* Instrucciones */}
-        <div className="absolute bottom-4 left-4 z-10 bg-white px-4 py-2 rounded-lg shadow-lg">
-          <p className="text-sm text-gray-600 flex items-center gap-2">
-            <MapPin className="w-4 h-4" />
-            Haz click en el mapa para reportar un robo
-          </p>
-        </div>
 
         {/* Formulario Modal */}
         {isFormOpen && selectedLocation && (

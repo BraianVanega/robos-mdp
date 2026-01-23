@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "Sistema de Denuncias de Robos",
-  description: "Plataforma para reportar y visualizar robos en la ciudad",
+  title: "robos-mdp | Sistema de Denuncias de Robos",
+  description: "Plataforma para reportar y visualizar robos en Mar del Plata",
 };
 
 export default function RootLayout({
@@ -13,7 +15,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased flex flex-col min-h-screen">
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </body>
     </html>
   );
 }

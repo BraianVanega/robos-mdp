@@ -10,11 +10,11 @@ export const getGoogleMapsApiKey = (): string => {
 
 export const getDefaultMapCenter = (): { lat: number; lng: number } => {
   return {
-    lat: parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LAT || "-34.603722"),
-    lng: parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LNG || "-58.381592"),
+    lat: parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LAT || "-38.0055"),
+    lng: parseFloat(process.env.NEXT_PUBLIC_DEFAULT_LNG || "-57.5426"),
   };
 };
 
 export const getDefaultZoom = (): number => {
-  return parseInt(process.env.NEXT_PUBLIC_DEFAULT_ZOOM || "13", 10);
+  return parseInt(process.env.NEXT_PUBLIC_DEFAULT_ZOOM || "12", 10);
 };
